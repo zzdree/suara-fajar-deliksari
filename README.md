@@ -1,43 +1,96 @@
-# Suara Fajar Deliksari - Radio Doa Pagi Live Streaming
+# 📻 Suara Fajar Deliksari — Live Audio Streaming Radio
 
-Aplikasi web live-streaming audio untuk radio doa pagi gereja GIA Deliksari dengan fitur interaksi real-time (chat doa dan reaksi).
+> Aplikasi Web Live-Streaming Audio WebRTC untuk siaran Radio Doa Pagi Gereja (GIA Deliksari) dengan fitur interaktif real-time (Chat Doa, Emoji Reactions, dan Studio Operator Siaran).
 
-## 🚀 Tech Stack
+![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)
+![LiveKit](https://img.shields.io/badge/Audio-LiveKit_WebRTC-002B36?style=flat-square)
+![Supabase](https://img.shields.io/badge/Database-Supabase_Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS (Dark Mode)
-- **Audio Streaming**: LiveKit (WebRTC)
-- **Real-time Database**: Supabase (PostgreSQL + Realtime)
-- **Deployment**: Vercel (recommended)
+---
 
-## 📋 Prerequisites
+## 📖 Overview
 
-Sebelum memulai, Anda perlu membuat akun dan mendapatkan credentials dari:
+**Suara Fajar Deliksari** adalah platform siaran radio doa pagi berbasis web modern yang dirancang khusus untuk memfasilitasi ibadah fajar jemaat secara digital dengan latensi audio sangat rendah (< 500ms). 
 
-1. **LiveKit Cloud** - [https://livekit.io](https://livekit.io)
-   - Sign up dan buat project baru
-   - Dapatkan: API Key, API Secret, dan WebSocket URL
+Aplikasi ini menggabungkan kekuatan **LiveKit WebRTC Cloud** untuk distribusi audio berkualitas tinggi dan **Supabase Realtime** untuk interaksi jemaat (permohonan doa langsung, reaksi emoji, dan status pendengar).
 
-2. **Supabase** - [https://supabase.com](https://supabase.com)
-   - Sign up dan buat project baru
-   - Dapatkan: Project URL dan Anon Key
+---
 
-## 🔧 Setup Instructions
+## ✨ Fitur Utama
 
-### 1. Install Dependencies
+- 🎙️ **Live Audio Broadcasting (WebRTC):** Siaran suara penyiar secara langsung dengan latensi minimal tanpa delay buffering radio konvensional.
+- 📱 **Listener Interactive Portal (`/`):**
+  - Pemutar audio terintegrasi (*one-click listen*) dengan visualizer audio responsif.
+  - Chat Permohonan Doa (*Prayer Request*) real-time.
+  - Tombol Reaksi Doa & Emoji interaktif (❤️, 🙏, 🕊️) dengan counter tersinkronisasi.
+  - Indikator jumlah pendengar aktif (*Real-Time Listener Count*).
+- 🎛️ **Operator Studio (`/operator`):**
+  - Portal mikrofon penyiar untuk memulai dan mengakhiri siaran langsung.
+  - Kontrol mic input, monitor level volume suara, dan status koneksi LiveKit room.
+- 🔐 **Admin Dashboard & Control (`/admin` & `/login`):**
+  - Manajemen status siaran (Live / Standby / Demo mode).
+  - Manajemen setlist lagu dan integrasi audio background.
+  - Proteksi otentikasi sesi berbasis PIN Admin.
 
-Dependencies sudah terinstall. Jika perlu install ulang:
+---
 
+## 🛠️ Tech Stack
+
+| Komponen | Teknologi |
+| :--- | :--- |
+| **Framework Fullstack** | [Next.js 14](https://nextjs.org/) (App Router) |
+| **Bahasa Pemrograman** | [TypeScript](https://www.typescriptlang.org/) |
+| **Styling & UI** | [Tailwind CSS](https://tailwindcss.com/) (Tema Dark & Responsive) |
+| **WebRTC Audio Engine** | [LiveKit Cloud](https://livekit.io/) (`@livekit/components-react`, `livekit-client`) |
+| **Realtime Database & Auth** | [Supabase](https://supabase.com/) (PostgreSQL + Realtime Publications) |
+| **Deployment Platform** | [Vercel](https://vercel.com/) |
+
+---
+
+## 📂 Struktur Rute Aplikasi
+
+```
+app/
+├── (public)
+│   ├── page.tsx               ← Halaman Utama Pendengar (Player + Doa + Reaksi)
+│   └── login/page.tsx         ← Halaman Login Admin / Operator
+├── operator/page.tsx          ← Studio Penyiar / Mic Broadcaster
+├── admin/page.tsx             ← Dashboard Kontrol Siaran
+└── api/
+    ├── livekit/route.ts       ← Token Generator WebRTC LiveKit
+    └── auth/
+        ├── login/route.ts     ← Handler Autentikasi Admin PIN
+        └── logout/route.ts    ← Handler Logout Sesi
+```
+
+---
+
+## 🚀 Panduan Instalasi Lokal
+
+### 1. Clone Repositori
+```bash
+git clone https://github.com/zzdree/suara-fajar-deliksari.git
+cd suara-fajar-deliksari
+```
+
+### 2. Install Dependensi
 ```bash
 npm install
 ```
 
-### 2. Configure Environment Variables
-
-Edit file `.env.local` dengan credentials Anda:
-
+### 3. Konfigurasi Environment Variables
+Salin template `.env.example` menjadi `.env.local`:
+```bash
+cp .env.example .env.local
+```
+Lalu lengkapi nilainya:
 ```env
 # LiveKit Configuration
+LIVEKIT_URL=wss://your-project.livekit.cloud
 NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
@@ -45,193 +98,45 @@ LIVEKIT_API_SECRET=your_livekit_api_secret
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # App Configuration
 NEXT_PUBLIC_ROOM_NAME=suara-fajar-deliksari
-NEXT_PUBLIC_OPERATOR_PIN=123456
+ADMIN_PIN=9900
+ADMIN_SESSION_SECRET=your_secret_key_string
 ```
 
-**⚠️ PENTING**: Ganti semua placeholder dengan credentials sebenarnya!
+### 4. Setup Database Supabase
+Buka **SQL Editor** pada dashboard proyek [Supabase](https://supabase.com) Anda, lalu jalankan script yang ada di:
+👉 **[`lib/supabase/schema.sql`](lib/supabase/schema.sql)**
 
-### 3. Setup Supabase Database
+Script tersebut akan secara otomatis membuat tabel `app_state`, `chats`, `reactions`, `setlist`, `listeners`, serta mengaktifkan fungsi *Row Level Security (RLS)* dan *Realtime Publication*.
 
-Buka Supabase Dashboard → SQL Editor, lalu jalankan script berikut:
-
-```sql
--- 1. Create chats table (for prayer requests)
-create table chats (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  name text not null,
-  message text not null
-);
-
--- 2. Create reactions table (for real-time reactions counter)
-create table reactions (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  emoji text not null,
-  count integer default 1 not null
-);
-
--- 3. Enable Row Level Security
-alter table chats enable row level security;
-alter table reactions enable row level security;
-
--- 4. Create policies (allow public read, allow public insert)
-create policy "Anyone can view chats" on chats for select using (true);
-create policy "Anyone can insert chats" on chats for insert with check (true);
-create policy "Anyone can view reactions" on reactions for select using (true);
-create policy "Anyone can insert reactions" on reactions for insert with check (true);
-create policy "Anyone can update reactions" on reactions for update using (true);
-
--- 5. Enable Realtime
-alter publication supabase_realtime add table chats;
-alter publication supabase_realtime add table reactions;
-
--- 6. Insert initial reaction counters
-insert into reactions (emoji, count) values ('❤️', 0);
-insert into reactions (emoji, count) values ('🙏', 0);
-```
-
-### 4. Run Development Server
-
+### 5. Jalankan Development Server
 ```bash
 npm run dev
 ```
-
-Buka browser:
-- **Halaman Audiens**: [http://localhost:3000](http://localhost:3000)
-- **Halaman Operator**: [http://localhost:3000/operator](http://localhost:3000/operator)
-
-## 📱 Fitur Aplikasi
-
-### Halaman Audiens (`/`)
-
-- ✅ Menampilkan nama radio dan jadwal rundown (bold italic)
-- ✅ Audio receiver dengan tombol "Dengarkan Live"
-- ✅ Form untuk mengirim permohonan doa
-- ✅ Tombol reaksi (❤️ 🙏) dengan counter real-time
-- ✅ Dark mode full dengan center-aligned layout
-
-### Halaman Operator (`/operator`)
-
-- ✅ PIN authentication gate (default: 123456)
-- ✅ Toggle Mic On/Off untuk broadcast audio
-- ✅ YouTube embed untuk musik pembuka/penutup
-- ✅ Live feedback panel (permohonan doa + statistik reaksi)
-- ✅ Dark mode full dengan responsive layout
-
-## 🧪 Testing Guide
-
-### Test Halaman Audiens
-
-1. Buka `http://localhost:3000` di browser mobile/emulator
-2. Verifikasi jadwal tampil dengan bold italic
-3. Klik "Dengarkan Live" (browser akan minta permission audio)
-4. Kirim permohonan doa → cek Supabase table `chats`
-5. Klik tombol reaksi → cek Supabase table `reactions`
-6. Buka tab kedua untuk verifikasi real-time updates
-
-### Test Halaman Operator
-
-1. Buka `http://localhost:3000/operator`
-2. Masukkan PIN (default: 123456)
-3. Klik "Mic ON" → browser akan minta permission mikrofon
-4. Paste URL YouTube dan klik "Load"
-5. Buka tab audiens di device lain, bicara di mic operator
-6. Verifikasi suara terdengar di audiens (latency < 1 detik)
-7. Kirim doa dari tab audiens → muncul di Live Feedback Panel operator
-
-### Test End-to-End Audio Streaming
-
-1. Di device pertama: buka `/operator` dan aktifkan Mic ON
-2. Di device kedua: buka `/` dan klik "Dengarkan Live"
-3. Bicara di mikrofon operator → terdengar di audiens
-4. Verifikasi latency rendah (< 1 detik)
-
-## 🚀 Deployment ke Production
-
-### Deploy ke Vercel (Recommended)
-
-1. Push code ke GitHub repository
-2. Import project di [Vercel](https://vercel.com)
-3. Tambahkan semua environment variables di Vercel dashboard
-4. Deploy!
-
-```bash
-# Or deploy via Vercel CLI
-npm i -g vercel
-vercel --prod
-```
-
-### Environment Variables di Vercel
-
-Jangan lupa tambahkan semua variables dari `.env.local` ke Vercel Dashboard → Settings → Environment Variables.
-
-## ⚠️ Catatan Keamanan
-
-### Client-Side PIN (Not Production-Grade)
-
-PIN operator saat ini tersimpan di environment variable yang bisa di-inspect di browser. Untuk production yang lebih aman:
-
-- Gunakan **NextAuth.js** dengan credential provider
-- Atau gunakan **Supabase Auth** dengan email/password
-- Atau minimal server-side session check
-
-### Row Level Security (RLS)
-
-RLS policies saat ini mengizinkan semua orang read/write. Untuk production:
-
-- Batasi write hanya untuk authenticated users
-- Tambahkan rate limiting untuk mencegah spam
-- Tambahkan moderation untuk chat content
-
-## 🎨 Design Guidelines
-
-### Strict Dark Mode
-
-- Background: Pure black (#000000)
-- Text: White (#ffffff)
-- Secondary: Dark gray (#0a0a0a, #1a1a1a)
-
-### Typography
-
-- Font: Inter (dari Google Fonts)
-- Headings: Bold + Italic untuk emphasis
-- Schedule/Rundown: Bold italic untuk keterbacaan
-
-### Layout
-
-- Semua konten center-aligned
-- Mobile-first responsive design
-- Fokus pada kenyamanan mata di pagi hari
-
-## 🐛 Troubleshooting
-
-### Audio tidak terdengar di audiens
-
-- Pastikan operator sudah klik "Mic ON"
-- Pastikan audiens sudah klik "Dengarkan Live"
-- Check browser console untuk error LiveKit
-- Verify LiveKit credentials di `.env.local`
-
-### Real-time updates tidak jalan
-
-- Check Supabase Realtime is enabled
-- Verify tables sudah ditambahkan ke `supabase_realtime` publication
-- Check browser console untuk Supabase connection errors
-
-### "Failed to get token" error
-
-- Verify semua LiveKit credentials benar
-- Check `app/api/livekit/route.ts` tidak ada error
-- Pastikan API route accessible (restart dev server)
-
-## 📞 Support
-
-Untuk bantuan lebih lanjut, hubungi tim IT GIA Deliksari.
+Buka browser di [http://localhost:3000](http://localhost:3000).
 
 ---
 
-**© 2026 GIA Deliksari - Diberkati untuk memberkati** 🙏
+## ☁️ Panduan Deployment (Vercel)
+
+Aplikasi ini dapat langsung dideploy ke [Vercel](https://vercel.com):
+
+1. Push kode ke akun GitHub Anda.
+2. Buka [Vercel Dashboard](https://vercel.com/new) dan impor repositori `suara-fajar-deliksari`.
+3. Pada bagian **Environment Variables**, tambahkan semua variabel dari `.env.example`.
+4. Klik **Deploy** 🚀.
+
+---
+
+## 👨‍💻 Author
+
+- **Andreas Restuawanta Christwara** ([@zzdree](https://github.com/zzdree))
+
+---
+
+## 📜 Lisensi
+
+Proyek ini dilisensikan di bawah [MIT License](LICENSE).

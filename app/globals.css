@@ -1,5 +1,4 @@
-@import '@livekit/components-styles';
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,15 +6,177 @@
 
 @layer base {
   html {
-    @apply dark;
+    color-scheme: dark;
   }
-  
+
   body {
-    @apply bg-black text-white antialiased;
+    @apply text-white antialiased font-sans;
+    background:
+      radial-gradient(circle at 50% 0%, rgb(193 18 31 / 75%), transparent 48%),
+      radial-gradient(circle at 0% 100%, rgb(105 10 10 / 50%), transparent 52%),
+      #210707;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-bold italic;
   }
 }
 
+/* ── Shells & Surfaces ─────────────────────────────────────────────── */
+@layer components {
+  .app-shell {
+    background: radial-gradient(circle at 50% 40%, rgb(153 27 27 / 33%), transparent 50%);
+  }
+
+  .panel {
+    @apply rounded-3xl border border-white/10 shadow-2xl shadow-black/30;
+    background: radial-gradient(circle at 50% 0%, rgb(155 27 27 / 33%), rgb(77 7 7 / 67%));
+  }
+
+  .surface-16x9 {
+    @apply rounded-3xl border border-white/10 shadow-2xl shadow-black/30;
+    background: radial-gradient(circle at 50% 50%, rgb(51 3 3 / 100%), rgb(33 7 7 / 67%), rgb(20 3 3 / 33%));
+  }
+
+  .surface-translucent {
+    @apply rounded-2xl border border-white/10;
+    background: rgb(255 255 255 / 5%);
+  }
+
+  .input-surface {
+    @apply rounded-2xl border border-white/10 bg-white/[.05] text-white transition focus:border-white/20;
+    &::placeholder {
+      color: rgb(255 255 255 / 33%);
+    }
+  }
+
+  .divider {
+    @apply border-t border-white/10;
+  }
+}
+
+/* ── Button Color System ─────────────────────────────────────────── */
+@layer components {
+  /* Base idle = white transparent flat 5%, border 10% */
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10
+      bg-white/[.05] px-5 py-3 text-sm font-bold transition
+      hover:border-white/20 hover:bg-white/[.10] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-gold {
+    @apply border-amber-100/10 bg-amber-400 text-amber-950 shadow-lg shadow-amber-900/20
+      hover:border-amber-100/20 hover:bg-amber-300;
+  }
+  .btn-gold-active {
+    @apply border-amber-200/40 bg-amber-300 text-amber-950 shadow-amber-300/40;
+  }
+
+  .btn-red {
+    @apply border-red-100/10 bg-red-500/95 text-red-950 shadow-lg shadow-red-900/30
+      hover:border-red-100/20 hover:bg-red-400;
+  }
+
+  .btn-green {
+    @apply border-green-100/10 bg-green-400/95 text-green-700 shadow-lg shadow-green-900/30
+      hover:border-green-100/20 hover:bg-green-300;
+  }
+
+  .btn-blue {
+    @apply border-blue-100/10 bg-blue-400/95 text-blue-700 shadow-lg shadow-blue-900/30
+      hover:border-blue-100/20 hover:bg-blue-300;
+  }
+
+  .btn-purple {
+    @apply border-purple-100/10 bg-purple-400/95 text-purple-700 shadow-lg shadow-purple-900/30
+      hover:border-purple-100/20 hover:bg-purple-300;
+  }
+
+  /* Typography tokens */
+  .ty-big-head { @apply text-3xl font-black italic sm:text-4xl; }
+  .ty-mid-head { @apply text-xl font-bold italic sm:text-2xl; }
+  .ty-mid-box  { @apply text-sm font-semibold text-white/80; }
+  .ty-mid-knob { @apply text-sm font-bold; }
+  .ty-sm-knob  { @apply text-xs font-bold; }
+  .ty-light    { @apply text-sm text-white/40; }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.2em] text-amber-300;
+  }
+}
+
+/* ── Animations ─────────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+.anim-pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+@keyframes audio-bar {
+  0%, 100% { transform: scaleY(0.15); }
+  50%      { transform: scaleY(1); }
+}
+.anim-audio-bar { animation: audio-bar 0.9s ease-in-out infinite; transform-origin: center; }
+
+@keyframes wipe-fade {
+  0%   { opacity: 0; transform: translateX(20px); filter: blur(6px); }
+  15%  { opacity: 1; transform: translateX(0);    filter: blur(0); }
+  85%  { opacity: 1; transform: translateX(0);    filter: blur(0); }
+  100% { opacity: 0; transform: translateX(-20px); filter: blur(6px); }
+}
+.anim-wipe { animation: wipe-fade 30s linear infinite; }
+
+@keyframes ring-pulse {
+  0%   { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.anim-ring { animation: ring-pulse 1.8s ease-out infinite; }
+
+@keyframes float-up {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.6); }
+  20%  { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-140px) scale(1.2); }
+}
+.anim-float { animation: float-up 2.4s ease-out forwards; }
+
+/* Custom range slider — gold */
+input[type='range'].slider-gold {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, rgb(247 194 58) var(--val, 80%), rgb(255 255 255 / 12%) var(--val, 80%));
+}
+input[type='range'].slider-gold::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #f7c23a;
+  border: 2px solid #b8870a;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgb(247 194 58 / 15%);
+}
+input[type='range'].slider-gold::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #f7c23a;
+  border: 2px solid #b8870a;
+  cursor: pointer;
+}
+
+/* Toggle switch */
+.toggle {
+  @apply relative inline-flex h-5 w-9 items-center rounded-full border border-white/10 bg-white/[.08] transition;
+}
+.toggle-knob {
+  @apply inline-block h-3.5 w-3.5 transform rounded-full bg-white transition;
+}
+.toggle-on {
+  @apply border-amber-200/30 bg-amber-300;
+}
+.toggle-on .toggle-knob {
+  @apply translate-x-4 bg-amber-900;
+}

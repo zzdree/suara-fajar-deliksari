@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { LiveKitRoom, RoomAudioRenderer, useRoom } from '@livekit/components-react';
+import { useState } from 'react';
+import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react';
 
 interface AudioReceiverProps {
   token: string;
