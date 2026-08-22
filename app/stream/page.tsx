@@ -9,9 +9,8 @@ import { TikTokChatbox } from '@/components/TikTokChatbox';
 import { StreamFloatingActions } from '@/components/StreamFloatingActions';
 import { BibleTicker } from '@/components/BibleTicker';
 import LiveListenerCounter from '@/components/LiveListenerCounter';
-import Link from 'next/link';
 
-export default function HomePage() {
+export default function StreamPage() {
   const [token, setToken] = useState<string | null>(null);
   const [appState, setAppState] = useState<AppState | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -19,7 +18,7 @@ export default function HomePage() {
   const [salamCount, setSalamCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Fetch LiveKit Token
+  // 1. Fetch LiveKit Token for listener
   useEffect(() => {
     const fetchToken = async () => {
       try {
@@ -31,7 +30,7 @@ export default function HomePage() {
           setToken(data.token);
         }
       } catch (err) {
-        console.error('Failed to get token:', err);
+        console.error('Failed to get livekit token:', err);
       } finally {
         setIsLoading(false);
       }
@@ -42,6 +41,7 @@ export default function HomePage() {
 
   // 2. Fetch initial data and subscribe to Supabase Realtime
   useEffect(() => {
+    // Initial fetch of app_state
     supabase
       .from('app_state')
       .select('*')
@@ -51,6 +51,7 @@ export default function HomePage() {
         if (data) setAppState(data as AppState);
       });
 
+    // Initial fetch of chats (limit 20)
     supabase
       .from('chats')
       .select('*')
@@ -60,6 +61,7 @@ export default function HomePage() {
         if (data) setMessages(data as ChatMessage[]);
       });
 
+    // Initial fetch of reactions (Suka 👍 and Salam 🕊️)
     supabase
       .from('reactions')
       .select('*')
@@ -72,8 +74,9 @@ export default function HomePage() {
         }
       });
 
+    // Realtime Subscriptions
     const stateChannel = supabase
-      .channel('home_app_state')
+      .channel('stream_app_state')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'app_state', filter: 'id=eq.1' },
@@ -84,7 +87,7 @@ export default function HomePage() {
       .subscribe();
 
     const chatChannel = supabase
-      .channel('home_chats')
+      .channel('stream_chats')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chats' },
@@ -97,7 +100,7 @@ export default function HomePage() {
       .subscribe();
 
     const reactChannel = supabase
-      .channel('home_reactions')
+      .channel('stream_reactions')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reactions' },
@@ -118,7 +121,9 @@ export default function HomePage() {
     };
   }, []);
 
+  // 3. Handle Reaction Click
   const handleReact = async (emoji: string) => {
+    // Optimistic UI
     if (emoji === '👍') setLikeCount((prev) => prev + 1);
     if (emoji === '🕊️') setSalamCount((prev) => prev + 1);
 
@@ -133,6 +138,7 @@ export default function HomePage() {
       });
   };
 
+  // 4. Handle Comment Submit
   const handleSendComment = async (name: string, message: string) => {
     const initial = name.charAt(0).toUpperCase() || 'J';
     await supabase.from('chats').insert({
@@ -144,7 +150,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between max-w-xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* ── Header ────────────────────────────────────────────────── */}
+      {/* ── Header (No Admin Button) ──────────────────────────────── */}
       <header className="text-center pt-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -156,16 +162,7 @@ export default function HomePage() {
               GIA Deliksari
             </span>
           </div>
-
-          <div className="flex items-center gap-2">
-            <LiveListenerCounter />
-            <Link
-              href="/login"
-              className="text-[11px] text-white/40 hover:text-white transition-colors px-2 py-1 rounded-md border border-white/5 hover:border-white/15"
-            >
-              Studio
-            </Link>
-          </div>
+          <LiveListenerCounter />
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-serif font-black tracking-tight text-white">
@@ -207,7 +204,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* ── TikTok-Style Live Chatbox View ──────────────────────────── */}
+      {/* ── TikTok-Style Live Chatbox View (Stacked max 6, no input) ─── */}
       <section aria-label="Live Chat" className="glass-card p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-semibold tracking-wider uppercase text-white/60">
