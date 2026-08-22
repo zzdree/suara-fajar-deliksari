@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        setError('PIN tidak valid. Periksa lalu coba lagi.');
+        setError('PIN administrator tidak valid. Silakan periksa kembali.');
         setPin('');
         return;
       }
@@ -30,43 +31,79 @@ export default function LoginPage() {
       router.replace('/admin');
       router.refresh();
     } catch {
-      setError('Koneksi gagal. Coba lagi.');
+      setError('Gagal menghubungkan ke server. Silakan coba lagi.');
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center p-5 sm:p-8">
-      <section className="panel w-full max-w-xl p-6 sm:p-10" aria-labelledby="login-title">
-        <p className="eyebrow">Suara Fajar Deliksari</p>
-        <h1 id="login-title" className="mt-3 text-4xl font-black italic sm:text-5xl">login panel</h1>
-        <p className="mt-3 text-sm text-white/[.67] sm:text-base">Gereja Isa Almasih Deliksari Semarang</p>
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 relative">
+      {/* Background ambient glow */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <form className="mt-10 space-y-4" onSubmit={handleSubmit}>
-          <label className="block" htmlFor="pin">
-            <span className="mb-2 block text-sm font-semibold text-white/80">PIN administrator</span>
+      <section className="glass-panel w-full max-w-md p-6 sm:p-8 relative z-10 border border-white/15">
+        <div className="text-center mb-6">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-amber-950 font-serif font-black text-2xl shadow-lg shadow-amber-500/20">
+            🎙️
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+            Studio Administrator
+          </h1>
+          <p className="text-xs text-slate-300/80 mt-1">
+            Suara Fajar Deliksari · GIA Deliksari Semarang
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-2 text-center" htmlFor="pin">
+              Masukkan PIN Akses Studio
+            </label>
             <input
+              id="pin"
+              name="pin"
+              type="password"
+              inputMode="numeric"
+              maxLength={16}
               autoComplete="current-password"
               autoFocus
-              className="input-surface w-full px-5 py-4 text-center text-2xl tracking-[0.45em] outline-none"
-              id="pin"
-              inputMode="numeric"
-              maxLength={32}
-              name="pin"
-              onChange={(event) => setPin(event.target.value)}
               required
-              type="password"
               value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="••••"
+              className="dawn-input text-center text-2xl tracking-[0.5em] py-3.5"
             />
-          </label>
-          {error && <p className="text-sm font-medium text-red-200" role="alert">{error}</p>}
-          <button className="button-gold w-full px-5 py-4 text-lg font-bold" disabled={isSubmitting} type="submit">
-            {isSubmitting ? 'Memeriksa...' : 'Masuk'}
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium text-center">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSubmitting || !pin.trim()}
+            className="dawn-btn-primary w-full text-sm py-3.5"
+          >
+            {isSubmitting ? 'Memeriksa Akses...' : 'Masuk ke Studio'}
           </button>
         </form>
+
+        <div className="mt-6 pt-4 border-t border-white/10 text-center">
+          <Link
+            href="/"
+            className="text-xs text-slate-400 hover:text-amber-300 transition-colors"
+          >
+            ← Kembali ke Halaman Pendengar Jemaat
+          </Link>
+        </div>
       </section>
-      <footer className="absolute bottom-5 text-center text-xs text-white/50">Multimedia GIA Deliksari Semarang · 2026</footer>
+
+      <footer className="mt-8 text-center text-[11px] text-slate-500">
+        Multimedia GIA Deliksari Semarang · 2026
+      </footer>
     </main>
   );
 }

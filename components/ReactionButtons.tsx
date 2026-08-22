@@ -3,38 +3,63 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 
-interface Reaction {
-  id: string;
+interface ReactionItem {
   emoji: string;
+  label: string;
   count: number;
 }
 
+interface FloatingParticle {
+  id: number;
+  emoji: string;
+  x: number;
+}
+
+const DEFAULT_REACTIONS: ReactionItem[] = [
+  { emoji: '🙏', label: 'Amin', count: 0 },
+  { emoji: '❤️', label: 'Kasih', count: 0 },
+  { emoji: '🕊️', label: 'Damai', count: 0 },
+  { emoji: '✝️', label: 'Syukur', count: 0 },
+];
+
 export default function ReactionButtons() {
-  const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [reactions, setReactions] = useState<ReactionItem[]>(DEFAULT_REACTIONS);
+  const [particles, setParticles] = useState<FloatingParticle[]>([]);
 
   useEffect(() => {
-    // Fetch initial reactions
+    const fetchReactions = async () => {
+      const { data, error } = await supabase
+        .from('reactions')
+        .select('*');
+
+      if (data && !error && data.length > 0) {
+        // Merge with default list to ensure all 4 emojis exist
+        const dbItems = data as ReactionItem[];
+        const merged = DEFAULT_REACTIONS.map((def) => {
+          const found = dbItems.find((d) => d.emoji === def.emoji);
+          return found ? { ...def, count: Number(found.count || 0) } : def;
+        });
+        setReactions(merged);
+      }
+    };
+
     fetchReactions();
 
-    // Subscribe to real-time updates
+    // Subscribe to realtime updates on reactions table
     const channel = supabase
-      .channel('reactions-changes')
+      .channel('public:reactions')
       .on(
         'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'reactions'
-        },
+        { event: '*', schema: 'public', table: 'reactions' },
         (payload) => {
-          setReactions((prev) =>
-            prev.map((r) =>
-              r.id === payload.new.id
-                ? { ...r, count: payload.new.count }
-                : r
-            )
-          );
+          if (payload.new && typeof payload.new === 'object' && 'emoji' in payload.new) {
+            const updated = payload.new as ReactionItem;
+            setReactions((prev) =>
+              prev.map((r) =>
+                r.emoji === updated.emoji ? { ...r, count: Number(updated.count || 0) } : r
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -44,52 +69,84 @@ export default function ReactionButtons() {
     };
   }, []);
 
-  const fetchReactions = async () => {
-    const { data, error } = await supabase
-      .from('reactions')
-      .select('*')
-      .order('emoji');
+  const handleReaction = async (emoji: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    // 1. Spawn floating particle effect
+    const rect = e.currentTarget.getBoundingClientRect();
+    const particleId = Date.now() + Math.random();
+    setParticles((prev) => [
+      ...prev,
+      { id: particleId, emoji, x: rect.left + rect.width / 2 - 12 },
+    ]);
 
-    if (data && !error) {
-      setReactions(data);
-    }
-  };
+    setTimeout(() => {
+      setParticles((prev) => prev.filter((p) => p.id !== particleId));
+    }, 1600);
 
-  const handleReaction = async (emoji: string) => {
-    if (isUpdating) return;
+    // 2. Optimistic UI update
+    const current = reactions.find((r) => r.emoji === emoji);
+    const newCount = (current?.count || 0) + 1;
+    setReactions((prev) =>
+      prev.map((r) => (r.emoji === emoji ? { ...r, count: newCount } : r))
+    );
 
-    setIsUpdating(true);
-
+    // 3. Upsert to Supabase
     try {
-      const reaction = reactions.find((r) => r.emoji === emoji);
-      if (!reaction) return;
-
-      const { error } = await supabase
+      await supabase
         .from('reactions')
-        .update({ count: reaction.count + 1 })
-        .eq('emoji', emoji);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating reaction:', error);
-    } finally {
-      setIsUpdating(false);
+        .upsert(
+          {
+            emoji,
+            label: current?.label || 'Reaksi',
+            count: newCount,
+          },
+          { onConflict: 'emoji' }
+        );
+    } catch (err) {
+      console.warn('Error updating reaction:', err);
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <h3 className="text-lg font-bold italic">Berikan Reaksi</h3>
-      <div className="flex gap-4">
+    <div className="glass-card p-5 sm:p-6 relative">
+      <div className="text-center mb-4">
+        <h3 className="text-base sm:text-lg font-serif font-bold text-white">
+          Kirim Reaksi & Amin Doa
+        </h3>
+        <p className="text-xs text-slate-400 mt-0.5">
+          Sentuh emoji untuk mengaminkan ibadah fajar bersama
+        </p>
+      </div>
+
+      {/* Floating particles container */}
+      <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+        {particles.map((p) => (
+          <span
+            key={p.id}
+            style={{ left: `${p.x}px`, bottom: '150px' }}
+            className="fixed text-3xl animate-float-burst"
+          >
+            {p.emoji}
+          </span>
+        ))}
+      </div>
+
+      {/* Reaction Buttons Grid */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-sm mx-auto">
         {reactions.map((reaction) => (
           <button
-            key={reaction.id}
-            onClick={() => handleReaction(reaction.emoji)}
-            disabled={isUpdating}
-            className="flex flex-col items-center gap-2 px-6 py-4 bg-mid-gray border border-gray-700 rounded-lg hover:border-white transition-colors disabled:opacity-50"
+            key={reaction.emoji}
+            onClick={(e) => handleReaction(reaction.emoji, e)}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-black/30 border border-white/10 hover:border-amber-500/40 hover:bg-amber-500/10 active:scale-90 transition-all duration-150 group shadow-md"
           >
-            <span className="text-4xl">{reaction.emoji}</span>
-            <span className="text-xl font-bold">{reaction.count}</span>
+            <span className="text-2xl sm:text-3xl group-hover:scale-125 transition-transform duration-200">
+              {reaction.emoji}
+            </span>
+            <span className="text-[11px] font-bold text-slate-300 mt-1">
+              {reaction.label}
+            </span>
+            <span className="text-[10px] font-mono font-bold text-amber-400 bg-white/5 px-2 py-0.5 rounded-full mt-0.5">
+              {reaction.count}
+            </span>
           </button>
         ))}
       </div>
