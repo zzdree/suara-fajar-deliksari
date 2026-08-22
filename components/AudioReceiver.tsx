@@ -1,44 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState } from '@livekit/components-react';
-import { ConnectionState } from 'livekit-client';
+import React, { useState, useRef } from 'react';
+import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react';
 
 interface AudioReceiverProps {
   token: string;
   serverUrl: string;
   isLive?: boolean;
-}
-
-function StreamStatusIndicator({ isLive }: { isLive: boolean }) {
-  const connectionState = useConnectionState();
-
-  if (connectionState === ConnectionState.Connected) {
-    return (
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-        </span>
-        Siaran Terhubung
-      </div>
-    );
-  }
-
-  if (connectionState === ConnectionState.Connecting || connectionState === ConnectionState.Reconnecting) {
-    return (
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold animate-pulse">
-        Menghubungkan...
-      </div>
-    );
-  }
-
-  return (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/50 text-xs font-medium">
-      <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
-      {isLive ? 'Siaran Siap' : 'Tidak Ada Siaran'}
-    </div>
-  );
 }
 
 export default function AudioReceiver({ token, serverUrl, isLive = true }: AudioReceiverProps) {
@@ -88,7 +56,19 @@ export default function AudioReceiver({ token, serverUrl, isLive = true }: Audio
               {isLive ? 'LIVE AUDIO' : 'STANDBY'}
             </span>
           </div>
-          <StreamStatusIndicator isLive={isLive} />
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs font-medium">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                isPlaying
+                  ? 'bg-emerald-400 animate-ping'
+                  : isLive
+                  ? 'bg-amber-400 animate-pulse'
+                  : 'bg-white/30'
+              }`}
+            />
+            {isPlaying ? 'Siaran Terhubung' : isLive ? 'Siaran Siap' : 'Tidak Ada Siaran'}
+          </div>
         </div>
 
         {/* Radio Title & Visualizer */}
