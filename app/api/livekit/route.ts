@@ -39,5 +39,6 @@ export async function GET(request: NextRequest) {
     canSubscribe: true, // Everyone can subscribe (listen)
   });
 
-  return NextResponse.json({ token: at.toJwt() });
+  const token = await at.toJwt();
+  return NextResponse.json({ token });
 }
