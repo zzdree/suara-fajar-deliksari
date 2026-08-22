@@ -1,15 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { AppState } from '@/lib/types';
 
 interface ProgramView169Props {
   appState: AppState | null;
   className?: string;
   isStreamPage?: boolean;
+  cameraStream?: MediaStream | null;
 }
 
-export function ProgramView169({ appState, className = '', isStreamPage = false }: ProgramView169Props) {
+export function ProgramView169({
+  appState,
+  className = '',
+  isStreamPage = false,
+  cameraStream = null,
+}: ProgramView169Props) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   // If blackout is ON, or neither YouTube nor Camera is ON
   const isBlackout = appState?.blackout_on || false;
   const isYouTubeOn = appState?.youtube_on && Boolean(appState?.current_youtube_id);
@@ -19,6 +27,12 @@ export function ProgramView169({ appState, className = '', isStreamPage = false 
   const showYouTube = !isBlackout && isYouTubeOn;
   const showCamera = !isBlackout && !isYouTubeOn && isCameraOn;
   const showNoSignal = isBlackout || (!showYouTube && !showCamera);
+
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, showCamera]);
 
   return (
     <div className={`surface-16-9 ${className}`}>
@@ -33,15 +47,27 @@ export function ProgramView169({ appState, className = '', isStreamPage = false 
         />
       )}
 
-      {/* 2. Camera Active (Placeholder or Video Stream Container) */}
+      {/* 2. Real Camera Stream Active */}
       {showCamera && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse">
-            📹
-          </div>
-          <span className="mt-2 text-xs font-semibold text-emerald-300">
-            Kamera Studio On-Air
-          </span>
+        <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
+          {cameraStream ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full object-cover -scale-x-100"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse text-2xl">
+                📹
+              </div>
+              <span className="mt-2 text-xs font-semibold text-emerald-300">
+                Kamera Studio On-Air
+              </span>
+            </div>
+          )}
         </div>
       )}
 

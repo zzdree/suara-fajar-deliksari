@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { AppState, ChatMessage, SetlistItem } from '@/lib/types';
 import { ProgramView169 } from '@/components/ProgramView169';
@@ -8,6 +8,7 @@ import { AudioVisualizer20 } from '@/components/AudioVisualizer20';
 import { TikTokChatbox } from '@/components/TikTokChatbox';
 import { extractYouTubeId, fetchYouTubeVideoInfo } from '@/lib/youtube';
 import LiveListenerCounter from '@/components/LiveListenerCounter';
+import { Room, createLocalAudioTrack, createLocalVideoTrack, LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
 import Link from 'next/link';
 
 export default function AdminWorkspace() {
@@ -15,7 +16,7 @@ export default function AdminWorkspace() {
   const [appState, setAppState] = useState<AppState>({
     id: 1,
     is_live: false,
-    is_demo: true,
+    is_demo: false,
     media_on: false,
     mic_on: false,
     mute_on: false,
@@ -38,7 +39,7 @@ export default function AdminWorkspace() {
   const [youtubeInput, setYoutubeInput] = useState('');
   const [isAddingVideo, setIsAddingVideo] = useState(false);
 
-  // Device selectors
+  // Hardware Devices
   const [mediaDevices, setMediaDevices] = useState<{ audio: MediaDeviceInfo[]; video: MediaDeviceInfo[] }>({
     audio: [],
     video: [],
@@ -46,6 +47,56 @@ export default function AdminWorkspace() {
   const [selectedMedia, setSelectedMedia] = useState('default');
   const [selectedMic, setSelectedMic] = useState('default');
   const [selectedCam, setSelectedCam] = useState('default');
+
+  // Real Hardware Streaming & LiveKit state
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [livekitConnected, setLivekitConnected] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
+
+  // Refs for persistent connections
+  const roomRef = useRef<Room | null>(null);
+  const localAudioTrackRef = useRef<LocalAudioTrack | null>(null);
+  const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Helper to enumerate devices
+  const refreshDevices = async () => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setMediaDevices({
+          audio: devices.filter((d) => d.kind === 'audioinput'),
+          video: devices.filter((d) => d.kind === 'videoinput'),
+        });
+      } catch (err) {
+        console.warn('Failed to enumerate devices:', err);
+      }
+    }
+  };
+
+  // Helper to explicitly request mic + cam permission
+  const requestHardwarePermissions = async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      setPermissionGranted(true);
+      await refreshDevices();
+      // Stop temporary permission-probing stream
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (err) {
+      console.warn('Microphone/Camera permission request:', err);
+      // Fallback: try audio only if camera is unavailable
+      try {
+        const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setPermissionGranted(true);
+        await refreshDevices();
+        aStream.getTracks().forEach((t) => t.stop());
+      } catch {
+        // Ignored
+      }
+    }
+  };
 
   // 1. Fetch initial state & hardware devices
   useEffect(() => {
@@ -91,15 +142,34 @@ export default function AdminWorkspace() {
         if (data) setSetlist(data as SetlistItem[]);
       });
 
-    // Enumerate hardware devices
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then((devices) => {
-        setMediaDevices({
-          audio: devices.filter((d) => d.kind === 'audioinput'),
-          video: devices.filter((d) => d.kind === 'videoinput'),
+    // Prompt for media permissions and enumerate devices
+    requestHardwarePermissions();
+
+    // Connect to LiveKit Room as operator publisher
+    const connectLiveKitPublisher = async () => {
+      try {
+        const roomName = process.env.NEXT_PUBLIC_ROOM_NAME || 'suara-fajar-deliksari';
+        const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://suara-fajar-deliksari-8jxfwoq0.livekit.cloud';
+
+        const res = await fetch(`/api/livekit?room=${encodeURIComponent(roomName)}&name=Operator-Studio&operator=true`);
+        if (!res.ok) return;
+        const { token } = await res.json();
+        if (!token) return;
+
+        const room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
         });
-      }).catch(() => {});
-    }
+
+        await room.connect(serverUrl, token);
+        roomRef.current = room;
+        setLivekitConnected(true);
+      } catch (err) {
+        console.warn('LiveKit publisher connection error:', err);
+      }
+    };
+
+    connectLiveKitPublisher();
 
     // Realtime subscriptions
     const stateChan = supabase
@@ -145,7 +215,6 @@ export default function AdminWorkspace() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'setlist' },
         () => {
-          // Re-fetch setlist
           supabase
             .from('setlist')
             .select('*')
@@ -162,6 +231,20 @@ export default function AdminWorkspace() {
       supabase.removeChannel(chatChan);
       supabase.removeChannel(reactChan);
       supabase.removeChannel(setlistChan);
+
+      // Clean up LiveKit room and tracks
+      if (localAudioTrackRef.current) {
+        localAudioTrackRef.current.stop();
+      }
+      if (localVideoTrackRef.current) {
+        localVideoTrackRef.current.stop();
+      }
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
 
@@ -175,7 +258,88 @@ export default function AdminWorkspace() {
     }
   };
 
-  // Toggle Button Handlers with Sync Logic (from PLAN.md Section 4 Panel 1)
+  // Hardware Mic Stream Start / Stop
+  const startMic = async () => {
+    try {
+      const audioTrack = await createLocalAudioTrack({
+        deviceId: selectedMic !== 'default' ? selectedMic : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      });
+
+      localAudioTrackRef.current = audioTrack;
+
+      // Hook Web Audio API Analyser to microphone stream
+      const stream = new MediaStream([audioTrack.mediaStreamTrack]);
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+
+      const src = ctx.createMediaStreamSource(stream);
+      const node = ctx.createAnalyser();
+      node.fftSize = 64;
+      node.smoothingTimeConstant = 0.8;
+      src.connect(node);
+      setAnalyser(node);
+
+      // Publish to LiveKit room
+      if (roomRef.current?.localParticipant) {
+        await roomRef.current.localParticipant.publishTrack(audioTrack);
+      }
+    } catch (err) {
+      console.error('Error starting microphone:', err);
+    }
+  };
+
+  const stopMic = async () => {
+    if (localAudioTrackRef.current) {
+      if (roomRef.current?.localParticipant) {
+        await roomRef.current.localParticipant.unpublishTrack(localAudioTrackRef.current);
+      }
+      localAudioTrackRef.current.stop();
+      localAudioTrackRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setAnalyser(null);
+  };
+
+  // Hardware Camera Stream Start / Stop
+  const startCamera = async () => {
+    try {
+      const videoTrack = await createLocalVideoTrack({
+        deviceId: selectedCam !== 'default' ? selectedCam : undefined,
+        resolution: { width: 1280, height: 720, frameRate: 30 },
+      });
+
+      localVideoTrackRef.current = videoTrack;
+      const stream = new MediaStream([videoTrack.mediaStreamTrack]);
+      setCameraStream(stream);
+
+      // Publish to LiveKit room
+      if (roomRef.current?.localParticipant) {
+        await roomRef.current.localParticipant.publishTrack(videoTrack);
+      }
+    } catch (err) {
+      console.error('Error starting camera:', err);
+    }
+  };
+
+  const stopCamera = async () => {
+    if (localVideoTrackRef.current) {
+      if (roomRef.current?.localParticipant) {
+        await roomRef.current.localParticipant.unpublishTrack(localVideoTrackRef.current);
+      }
+      localVideoTrackRef.current.stop();
+      localVideoTrackRef.current = null;
+    }
+    setCameraStream(null);
+  };
+
+  // Toggle Button Handlers with Sync Logic & Real Hardware
   const toggleMedia = () => {
     const nextVal = !appState.media_on;
     if (appState.sync_on) {
@@ -185,19 +349,31 @@ export default function AdminWorkspace() {
     }
   };
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
     const nextVal = !appState.mic_on;
+    if (nextVal) {
+      await startMic();
+    } else {
+      await stopMic();
+    }
+
     if (appState.sync_on) {
+      if (nextVal && !appState.camera_on) {
+        await startCamera();
+      } else if (!nextVal && appState.camera_on) {
+        await stopCamera();
+      }
       updateState({ mic_on: nextVal, camera_on: nextVal, is_live: nextVal || appState.media_on });
     } else {
       updateState({ mic_on: nextVal, is_live: nextVal || appState.media_on });
     }
   };
 
-  const toggleMute = () => {
+  const toggleMute = async () => {
     const nextVal = !appState.mute_on;
     if (nextVal) {
-      // Mute active: turn off audio media & mic
+      // Mute active: stop audio media & mic
+      await stopMic();
       updateState({ mute_on: true, media_on: false, mic_on: false, is_live: false });
     } else {
       updateState({ mute_on: false });
@@ -213,20 +389,33 @@ export default function AdminWorkspace() {
     }
   };
 
-  const toggleCamera = () => {
+  const toggleCamera = async () => {
     const nextVal = !appState.camera_on;
+    if (nextVal) {
+      await startCamera();
+    } else {
+      await stopCamera();
+    }
+
     if (appState.sync_on) {
+      if (nextVal && !appState.mic_on) {
+        await startMic();
+      } else if (!nextVal && appState.mic_on) {
+        await stopMic();
+      }
       updateState({ camera_on: nextVal, mic_on: nextVal });
     } else {
       updateState({ camera_on: nextVal });
     }
   };
 
-  const toggleBlackout = () => {
+  const toggleBlackout = async () => {
     const nextVal = !appState.blackout_on;
     if (nextVal) {
-      // Blackout active: turn off video/camera
+      // Blackout active: stop camera & mute
+      await stopCamera();
       if (appState.sync_on) {
+        await stopMic();
         updateState({
           blackout_on: true,
           mute_on: true,
@@ -252,7 +441,7 @@ export default function AdminWorkspace() {
     updateState({ is_demo: !appState.is_demo });
   };
 
-  // Setlist Operations (from PLAN.md Section 4 Panel 3)
+  // Setlist Operations
   const handleAddYouTube = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = extractYouTubeId(youtubeInput);
@@ -287,7 +476,6 @@ export default function AdminWorkspace() {
   };
 
   const handlePlaySong = async (song: SetlistItem) => {
-    // Mark song as playing
     const updated = setlist.map((s) => ({ ...s, is_playing: s.id === song.id }));
     setSetlist(updated);
 
@@ -362,9 +550,28 @@ export default function AdminWorkspace() {
             <h1 className="font-serif font-black italic text-lg sm:text-xl text-white tracking-tight">
               administrator panel
             </h1>
+            {livekitConnected ? (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-bold text-emerald-400">
+                ● LiveKit On-Air Ready
+              </span>
+            ) : (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-bold text-amber-400">
+                Connecting LiveKit...
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
+            {!permissionGranted && (
+              <button
+                onClick={requestHardwarePermissions}
+                className="btn-gold px-3 py-1 text-xs font-bold animate-pulse"
+                title="Izinkan akses mikrofon dan kamera"
+              >
+                🎙️ Izinkan Mic & Cam
+              </button>
+            )}
+
             {/* Demo Toggle Button (Gold when off, Green when on) */}
             <button
               onClick={toggleDemo}
@@ -385,7 +592,7 @@ export default function AdminWorkspace() {
         </div>
       </header>
 
-      {/* ── 3 Main Panels Grid (Horizontal on laptop, vertical on mobile) ── */}
+      {/* ── 3 Main Panels Grid ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -399,15 +606,18 @@ export default function AdminWorkspace() {
                 <span className="text-[10px] font-mono text-white/50">PANEL 1</span>
               </div>
 
-              {/* 1. Program View (16:9) */}
-              <ProgramView169 appState={appState} />
+              {/* 1. Program View (16:9) with Real Live Camera Feed */}
+              <ProgramView169 appState={appState} cameraStream={cameraStream} />
 
-              {/* 2. Audio View: 20-bar realtime visualizer */}
+              {/* 2. Audio View: 20-bar realtime visualizer with Web Audio API Frequency input */}
               <div className="mt-4">
                 <span className="text-[10px] font-semibold text-white/60 tracking-wider uppercase mb-1.5 block">
-                  Audio Level Monitor
+                  Audio Level Monitor {appState.mic_on ? '(Mic Input Live)' : ''}
                 </span>
-                <AudioVisualizer20 isActive={appState.media_on || appState.mic_on} />
+                <AudioVisualizer20
+                  isActive={appState.media_on || appState.mic_on}
+                  analyser={analyser}
+                />
               </div>
 
               {/* 3. 6 Control Buttons (Grid 3x2) */}
@@ -518,11 +728,20 @@ export default function AdminWorkspace() {
               </div>
             </div>
 
-            {/* 5. Device Selectors (Hardware reading) */}
+            {/* 5. Device Selectors (Real Hardware Reading & Selection) */}
             <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
-              <span className="text-[10px] font-semibold text-white/60 tracking-wider uppercase block">
-                Hardware Device Select
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-white/60 tracking-wider uppercase block">
+                  Hardware Device Select
+                </span>
+                <button
+                  onClick={requestHardwarePermissions}
+                  className="text-[10px] text-amber-300 hover:underline"
+                >
+                  ↻ Scan Device
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 gap-2 text-xs">
                 {/* Audio Media */}
                 <select
@@ -530,33 +749,44 @@ export default function AdminWorkspace() {
                   onChange={(e) => setSelectedMedia(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 text-white/80 text-[11px] focus:outline-none"
                 >
-                  <option value="default">Media: Default (System Output)</option>
-                  {mediaDevices.audio.map((d, i) => (
-                    <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Audio Device ${i + 1}`}</option>
-                  ))}
+                  <option value="default">Media Output: Default Speaker</option>
                 </select>
 
-                {/* Microphone */}
+                {/* Microphone Selection */}
                 <select
                   value={selectedMic}
-                  onChange={(e) => setSelectedMic(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedMic(e.target.value);
+                    if (appState.mic_on) {
+                      stopMic().then(() => startMic());
+                    }
+                  }}
                   className="w-full rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 text-white/80 text-[11px] focus:outline-none"
                 >
-                  <option value="default">Mic: Default (System Mic)</option>
+                  <option value="default">Mic: Default Input</option>
                   {mediaDevices.audio.map((d, i) => (
-                    <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+                    <option key={d.deviceId || i} value={d.deviceId}>
+                      🎙️ {d.label || `Microphone ${i + 1}`}
+                    </option>
                   ))}
                 </select>
 
-                {/* Camera */}
+                {/* Camera Selection */}
                 <select
                   value={selectedCam}
-                  onChange={(e) => setSelectedCam(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedCam(e.target.value);
+                    if (appState.camera_on) {
+                      stopCamera().then(() => startCamera());
+                    }
+                  }}
                   className="w-full rounded-lg border border-white/10 bg-black/50 px-2.5 py-1.5 text-white/80 text-[11px] focus:outline-none"
                 >
-                  <option value="default">Cam: Default (Webcam)</option>
+                  <option value="default">Cam: Default Webcam</option>
                   {mediaDevices.video.map((d, i) => (
-                    <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                    <option key={d.deviceId || i} value={d.deviceId}>
+                      📹 {d.label || `Camera ${i + 1}`}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -666,7 +896,7 @@ export default function AdminWorkspace() {
                 )}
               </div>
 
-              {/* 2. Volume Slider (Horizontal: left white number, right gold slider) */}
+              {/* 2. Volume Slider */}
               <div className="mt-3 surface-trans-flat p-3 flex items-center gap-3">
                 <span className="text-xs font-mono font-bold text-white w-8 text-left">
                   {appState.volume}%
@@ -681,7 +911,7 @@ export default function AdminWorkspace() {
                 />
               </div>
 
-              {/* 3. Setlist Memory System Warning Box */}
+              {/* 3. Setlist Warning Box */}
               {setlist.length < 3 && (
                 <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-center">
                   <span className="text-[11px] font-medium text-amber-300">
@@ -690,7 +920,7 @@ export default function AdminWorkspace() {
                 </div>
               )}
 
-              {/* 4. 5 Action Buttons: Play (Green), Stop (Gold), Fade (Blue), Shuffle (Purple), Delete (Red) */}
+              {/* 4. 5 Action Buttons */}
               <div className="mt-3 grid grid-cols-5 gap-1.5">
                 {/* Play */}
                 <button
@@ -783,7 +1013,7 @@ export default function AdminWorkspace() {
 
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
-                          onClick={() => song.is_playing ? handleStopMedia() : handlePlaySong(song)}
+                          onClick={() => (song.is_playing ? handleStopMedia() : handlePlaySong(song))}
                           className={`p-1.5 rounded-lg text-[10px] font-bold ${
                             song.is_playing ? 'btn-red' : 'btn-green'
                           }`}
@@ -803,15 +1033,11 @@ export default function AdminWorkspace() {
               </div>
             </div>
 
-            {/* Quick Link to Stream Page */}
-            <div className="pt-3 border-t border-white/10 text-center">
-              <Link
-                href="/stream"
-                target="_blank"
-                className="text-xs text-amber-300/80 hover:text-amber-200 transition-colors inline-flex items-center gap-1 font-semibold"
-              >
-                <span>Buka Layar Jemaat (/stream)</span>
-                <span>↗</span>
+            {/* Link to public stream page */}
+            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-white/40">Halaman Publik:</span>
+              <Link href="/stream" target="_blank" className="text-amber-300 hover:underline flex items-center gap-1">
+                Buka Stream Jemaat ↗
               </Link>
             </div>
           </div>
