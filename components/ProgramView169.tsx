@@ -18,25 +18,56 @@ export function ProgramView169({
 }: ProgramView169Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // If blackout is ON, or neither YouTube nor Camera is ON
   const isBlackout = appState?.blackout_on || false;
   const isYouTubeOn = appState?.youtube_on && Boolean(appState?.current_youtube_id);
   const isCameraOn = appState?.camera_on || false;
   const isLive = appState?.is_live || false;
 
-  const showYouTube = !isBlackout && isYouTubeOn;
-  const showCamera = !isBlackout && !isYouTubeOn && isCameraOn;
+  // Camera takes visual precedence when turned ON
+  const showCamera = !isBlackout && isCameraOn;
+  const showYouTube = !isBlackout && !isCameraOn && isYouTubeOn;
   const showNoSignal = isBlackout || (!showYouTube && !showCamera);
 
   useEffect(() => {
-    if (videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
+    if (videoRef.current) {
+      if (cameraStream) {
+        videoRef.current.srcObject = cameraStream;
+        videoRef.current.play().catch((err) => console.warn('Video auto-play:', err));
+      } else {
+        videoRef.current.srcObject = null;
+      }
     }
   }, [cameraStream, showCamera]);
 
   return (
     <div className={`surface-16-9 ${className}`}>
-      {/* 1. YouTube Active */}
+      {/* 1. Real Camera Stream Active */}
+      {showCamera && (
+        <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`h-full w-full object-cover -scale-x-100 ${cameraStream ? 'block' : 'hidden'}`}
+          />
+          {!cameraStream && (
+            <div className="flex flex-col items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse text-2xl">
+                📹
+              </div>
+              <span className="mt-2 text-xs font-semibold text-emerald-300">
+                Memulai Kamera Studio...
+              </span>
+              <span className="text-[10px] text-white/50 mt-0.5">
+                Pastikan izin webcam diaktifkan di browser
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. YouTube Active */}
       {showYouTube && appState?.current_youtube_id && (
         <iframe
           src={`https://www.youtube-nocookie.com/embed/${appState.current_youtube_id}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&playsinline=1`}
@@ -45,30 +76,6 @@ export function ProgramView169({
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
         />
-      )}
-
-      {/* 2. Real Camera Stream Active */}
-      {showCamera && (
-        <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
-          {cameraStream ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="h-full w-full object-cover -scale-x-100"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse text-2xl">
-                📹
-              </div>
-              <span className="mt-2 text-xs font-semibold text-emerald-300">
-                Kamera Studio On-Air
-              </span>
-            </div>
-          )}
-        </div>
       )}
 
       {/* 3. No Signal / Blackout / Idle State */}
@@ -101,6 +108,11 @@ export function ProgramView169({
             <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-white animate-pulse' : 'bg-white/40'}`} />
             {isLive ? 'ON AIR' : 'STANDBY'}
           </span>
+          {showCamera && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-600/80 px-2 py-0.5 text-[10px] font-bold text-white uppercase backdrop-blur-md">
+              📹 CAM LIVE
+            </span>
+          )}
         </div>
 
         {appState?.current_youtube_title && showYouTube && (

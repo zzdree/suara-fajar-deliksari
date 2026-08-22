@@ -8,7 +8,7 @@ import { AudioVisualizer20 } from '@/components/AudioVisualizer20';
 import { TikTokChatbox } from '@/components/TikTokChatbox';
 import { extractYouTubeId, fetchYouTubeVideoInfo } from '@/lib/youtube';
 import LiveListenerCounter from '@/components/LiveListenerCounter';
-import { Room, createLocalAudioTrack, createLocalVideoTrack, LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
+import { Room, LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
 import Link from 'next/link';
 
 export default function AdminWorkspace() {
@@ -261,17 +261,15 @@ export default function AdminWorkspace() {
   // Hardware Mic Stream Start / Stop
   const startMic = async () => {
     try {
-      const audioTrack = await createLocalAudioTrack({
-        deviceId: selectedMic !== 'default' ? selectedMic : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: selectedMic !== 'default' ? { deviceId: { exact: selectedMic } } : true,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
-      localAudioTrackRef.current = audioTrack;
-
-      // Hook Web Audio API Analyser to microphone stream
-      const stream = new MediaStream([audioTrack.mediaStreamTrack]);
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
@@ -283,9 +281,15 @@ export default function AdminWorkspace() {
       src.connect(node);
       setAnalyser(node);
 
-      // Publish to LiveKit room
-      if (roomRef.current?.localParticipant) {
-        await roomRef.current.localParticipant.publishTrack(audioTrack);
+      try {
+        const audioTrack = new LocalAudioTrack(stream.getAudioTracks()[0]);
+        localAudioTrackRef.current = audioTrack;
+
+        if (roomRef.current?.localParticipant) {
+          await roomRef.current.localParticipant.publishTrack(audioTrack);
+        }
+      } catch (trackErr) {
+        console.warn('LiveKit audio publish warning:', trackErr);
       }
     } catch (err) {
       console.error('Error starting microphone:', err);
@@ -295,13 +299,13 @@ export default function AdminWorkspace() {
   const stopMic = async () => {
     if (localAudioTrackRef.current) {
       if (roomRef.current?.localParticipant) {
-        await roomRef.current.localParticipant.unpublishTrack(localAudioTrackRef.current);
+        await roomRef.current.localParticipant.unpublishTrack(localAudioTrackRef.current).catch(() => {});
       }
       localAudioTrackRef.current.stop();
       localAudioTrackRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close();
+      audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
     setAnalyser(null);
@@ -310,18 +314,26 @@ export default function AdminWorkspace() {
   // Hardware Camera Stream Start / Stop
   const startCamera = async () => {
     try {
-      const videoTrack = await createLocalVideoTrack({
-        deviceId: selectedCam !== 'default' ? selectedCam : undefined,
-        resolution: { width: 1280, height: 720, frameRate: 30 },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: selectedCam !== 'default' ? { deviceId: { exact: selectedCam } } : true,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
 
-      localVideoTrackRef.current = videoTrack;
-      const stream = new MediaStream([videoTrack.mediaStreamTrack]);
       setCameraStream(stream);
 
-      // Publish to LiveKit room
-      if (roomRef.current?.localParticipant) {
-        await roomRef.current.localParticipant.publishTrack(videoTrack);
+      try {
+        const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0]);
+        localVideoTrackRef.current = videoTrack;
+
+        if (roomRef.current?.localParticipant) {
+          await roomRef.current.localParticipant.publishTrack(videoTrack);
+        }
+      } catch (trackErr) {
+        console.warn('LiveKit video publish warning:', trackErr);
       }
     } catch (err) {
       console.error('Error starting camera:', err);
@@ -329,9 +341,12 @@ export default function AdminWorkspace() {
   };
 
   const stopCamera = async () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+    }
     if (localVideoTrackRef.current) {
       if (roomRef.current?.localParticipant) {
-        await roomRef.current.localParticipant.unpublishTrack(localVideoTrackRef.current);
+        await roomRef.current.localParticipant.unpublishTrack(localVideoTrackRef.current).catch(() => {});
       }
       localVideoTrackRef.current.stop();
       localVideoTrackRef.current = null;
@@ -393,19 +408,20 @@ export default function AdminWorkspace() {
     const nextVal = !appState.camera_on;
     if (nextVal) {
       await startCamera();
+      if (appState.sync_on) {
+        if (!appState.mic_on) await startMic();
+        updateState({ camera_on: true, mic_on: true, youtube_on: false, is_live: true });
+      } else {
+        updateState({ camera_on: true, youtube_on: false, is_live: true });
+      }
     } else {
       await stopCamera();
-    }
-
-    if (appState.sync_on) {
-      if (nextVal && !appState.mic_on) {
-        await startMic();
-      } else if (!nextVal && appState.mic_on) {
-        await stopMic();
+      if (appState.sync_on) {
+        if (appState.mic_on) await stopMic();
+        updateState({ camera_on: false, mic_on: false, is_live: appState.media_on });
+      } else {
+        updateState({ camera_on: false, is_live: appState.media_on || appState.mic_on });
       }
-      updateState({ camera_on: nextVal, mic_on: nextVal });
-    } else {
-      updateState({ camera_on: nextVal });
     }
   };
 
