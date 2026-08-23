@@ -107,15 +107,19 @@ create policy "public insert reactions" on public.reactions for insert with chec
 drop policy if exists "public update reactions" on public.reactions;
 create policy "public update reactions" on public.reactions for update using (true);
 
--- Admin State & Setlist CRUD
+-- Admin State & Setlist CRUD (Protected: only authenticated users or service_role via Next.js backend)
 drop policy if exists "public insert setlist" on public.setlist;
-create policy "public insert setlist" on public.setlist for insert with check (true);
+drop policy if exists "admin insert setlist" on public.setlist;
+create policy "admin insert setlist" on public.setlist for insert to authenticated, service_role with check (true);
 
 drop policy if exists "public update setlist" on public.setlist;
-create policy "public update setlist" on public.setlist for update using (true);
+drop policy if exists "admin update setlist" on public.setlist;
+create policy "admin update setlist" on public.setlist for update to authenticated, service_role using (true) with check (true);
 
 drop policy if exists "public delete setlist" on public.setlist;
-create policy "public delete setlist" on public.setlist for delete using (true);
+drop policy if exists "admin delete setlist" on public.setlist;
+create policy "admin delete setlist" on public.setlist for delete to authenticated, service_role using (true);
 
 drop policy if exists "public update app_state" on public.app_state;
-create policy "public update app_state" on public.app_state for update using (true);
+drop policy if exists "admin update app_state" on public.app_state;
+create policy "admin update app_state" on public.app_state for update to authenticated, service_role using (true) with check (true);
