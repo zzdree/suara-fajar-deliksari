@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { AppState, ChatMessage, SetlistItem } from '@/lib/types';
 import { ProgramView169 } from '@/components/ProgramView169';
@@ -61,7 +61,7 @@ export default function AdminWorkspace() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Helper to enumerate devices
-  const refreshDevices = async () => {
+  const refreshDevices = useCallback(async () => {
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -73,10 +73,10 @@ export default function AdminWorkspace() {
         console.warn('Failed to enumerate devices:', err);
       }
     }
-  };
+  }, []);
 
   // Helper to explicitly request mic + cam permission
-  const requestHardwarePermissions = async () => {
+  const requestHardwarePermissions = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
@@ -96,7 +96,7 @@ export default function AdminWorkspace() {
         // Ignored
       }
     }
-  };
+  }, [refreshDevices]);
 
   // 1. Fetch initial state & hardware devices
   useEffect(() => {
@@ -246,7 +246,7 @@ export default function AdminWorkspace() {
         audioContextRef.current.close();
       }
     };
-  }, []);
+  }, [requestHardwarePermissions]);
 
   // Update AppState Helper
   const updateState = async (patch: Partial<AppState>) => {
